@@ -1,0 +1,1668 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>屏幕尺</title>
+    <style>
+        body
+        {
+            padding: 0px;
+            margin: 0px;
+            overflow: hidden;
+        }
+        #rulerWrap
+        {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+            overflow: hidden;
+        }
+        
+        #rulerCanvas
+        {
+            background: #cccccc;
+            display: inline;
+        }
+        
+        
+        #configPanel
+        {
+            position: absolute;
+        }
+        #configPanel td.title
+        {
+            text-align: right;
+        }
+        #configPanel select
+        {
+            min-width: 100px;
+        }
+        
+        
+        #buttonPanel
+        {
+            position: absolute;
+            display: inline;
+        }
+        #aboutPanel
+        {
+            position: absolute;
+            display: none;
+        }
+        
+        #aboutPanel.show
+        {
+        }
+    </style>
+</head>
+<body>
+    <div id="rulerWrap" style="" onselectstart="return false;">
+        <canvas id="rulerCanvas" onselectstart="return false;"></canvas>
+        <div id="configPanel">
+            <fieldset>
+                <legend>设置</legend>
+                <div>
+                    <div>
+                        <table class="configPanel" border="0" cellpadding="0" cellspacing="0">
+                            <tr>
+                                <td class="title">
+                                    屏幕<span style="font-size: 0.7em;">(尺寸)</span>：
+                                </td>
+                                <td>
+                                    <select id="selScreenSize">
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="title">
+                                    单位：
+                                </td>
+                                <td>
+                                    <select id="selUnit">
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="title">
+                                    显示：
+                                </td>
+                                <td>
+                                    <div>
+                                        <input type="checkbox" name="showRuler" value="top" checked="checked">上</input><input
+                                            type="checkbox" name="showRuler" value="right">右</input><input type="checkbox" name="showRuler"
+                                                value="bottom">下</input><input type="checkbox" name="showRuler" value="left">左</input></div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="title">
+                                </td>
+                                <td>
+                                    <div style="float: right;">
+                                        <button onclick="clearConfig();">
+                                            重置</button>
+                                        <button onclick="hideConfigPanel();">
+                                            确定</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </fieldset>
+        </div>
+        <div id="aboutPanel">
+            <div style="font-size: 2em; text-align: center; line-height: 2em;">
+                关于屏幕尺</div>
+            <div>
+                版本:0.1</div>
+            <div>
+                作者：刘文杰
+            </div>
+            <div>
+                邮箱:liuwenjiexx@sina.com</div>
+            <div style="text-align: right;">
+                <button onclick="hideAboutPanel();">
+                    确定</button></div>
+        </div>
+        <div id="buttonPanel">
+            <input type="button" style="" onclick="showConfigPanel();" value="设置" />
+            <input type="button" style='' onclick="showAboutPanel();" value="关于" />
+        </div>
+    </div>
+    <script>
+
+        function extend(obj, baseObj) {
+            if (obj && baseObj)
+                for (var key in baseObj)
+                    if (!(key in obj))
+                        obj[key] = baseObj[key];
+            return obj;
+        }
+
+        function hasCls(el, className) {
+            if (!el.className || !className)
+                return false;
+            return (" " + el.className + " ").indexOf(" " + className + " ") >= 0;
+        }
+
+        function addCls(el, className) {
+            if (hasCls(el, className))
+                return;
+            el.className += " " + className;
+        }
+
+        function removeCls(el, className) {
+            if (!hasCls(el, className))
+                return;
+            el.className = (" " + el.className + " ").replace(" " + className + " ");
+        }
+
+
+        function delegate(func, obj) {
+            return function () { func.apply(obj, arguments); };
+        }
+
+        Array.repeat = function (el, count) {
+            var arr = [];
+            while (count-- > 0) arr.push(el);
+            return arr;
+        }
+        function isFunc(func) {
+            return typeof func == "function";
+        }
+
+        function strPad(str, chr, length, isRight) {
+            var offset = length - str.length;
+            if (offset <= 0) return str;
+
+            var chrArr = Array.repeat(chr, offset);
+            return isRight ? str + chrArr.join('') : chrArr.join('') + str;
+        }
+
+        String.prototype.padLeft = function (chr, length) {
+            return strPad(this, chr, length, false);
+        }
+        String.prototype.padRight = function (chr, length) {
+            return strPad(this, chr, length, true);
+        }
+
+        function delayInvoke(func, delay, cancel) {
+            var cach = arguments.callee.cach;
+            if (!cach) cach = arguments.callee.cach = {};
+            if (cach[func] == undefined) cach[func] = 0;
+
+            return function () {
+                var tId = cach[func];
+                var args = arguments;
+                var self = this;
+                if (cancel && tId != 0) {
+                    clearTimeout(tId);
+                    tId = cach[func] = 0;
+                }
+                if (tId == 0) {
+                    cach[func] = setTimeout(function () {
+                        func.apply(self, args);
+                        cach[func] = 0;
+                    }, delay);
+                }
+
+            };
+        }
+
+        Math.clamp = function (n, min, max) {
+            return n < min ? min : n > max ? max : n;
+        }
+
+        function log(msg) {
+            if (typeof console != "undefined" && console.log)
+                console.log(msg);
+            else
+                alert(msg);
+        }
+
+        function inRange(x, y, minX, minY, maxX, maxY) {
+            if (arguments.length == 3) {
+                if (minX.length) {
+                    minY = minX[1];
+                    maxX = minX[2];
+                    maxY = minX[3];
+                    minX = minX[0];
+                }
+            }
+            return ((minX <= x && x <= maxX) && (minY <= y && y <= maxY));
+        }
+
+        var isChrome = (/chrome/i).exec(navigator.userAgent) != null;
+        var isIE = (/msie/i).exec(navigator.userAgent) != null;
+
+        var screenSizes = [{ unit: "in", unitText: "英寸", sizes: [11.6, 12.5, 13.3, 14, 15.6, 16, 17.3, 18.4, 18.5, 19, 20, 21.5, 22, 23, 23.6, 24, 24.1, 25, 27, 29,30]}];
+
+        var defaultConfig = { unit: "cm", dpu: 100, screenSize: "resize", paddingTop: 70, paddingBottom: 70, paddingLeft: 15, paddingRight: 15, showTop: true, showRight: true, showBottom: true, showLeft: true };
+
+        var canvasWrap = document.getElementById("rulerWrap");
+        var canvas = document.getElementById('rulerCanvas');
+        var configPanel = document.getElementById("configPanel");
+        var selScreenSize = document.getElementById("selScreenSize");
+        var selUnit = document.getElementById("selUnit");
+
+
+        var resizable = false;
+        var reoffsetable = false;
+        var currentConfig = extend({}, defaultConfig);
+        var buttonPanel = document.getElementById("buttonPanel");
+        var aboutPanel = document.getElementById("aboutPanel");
+        var firstLoad = true;
+
+        function defualtRulerLabel(pos) {
+            if (currentConfig.unit == "px") {
+                return Math.round(currentConfig.dpu * pos) + currentConfig.unit;
+            }
+            return round(pos / (parseFloat(this.split) || 1), 2) + currentConfig.unit;
+        }
+
+        var units = { strokeWidth: 2, strokeHeight: 20, strokeStyle: "#000000", fillStyle: "#000000", textBaseline: "top", font: 'italic 16px sans-serif', text: defualtRulerLabel, children: [
+        { split: 2, minPixelWidth: 200, strokeWidth: 2, strokeHeight: 15, text: function (pos) { return pos % 2 == 0 ? null : defualtRulerLabel.apply(this, [pos]); }, children: [
+             { split: 20, minPixelWidth: 10, strokeWidth: 1, strokeHeight: 10, children: [
+             { split: 4, minPixelWidth: 5, strokeWidth: 2, strokeHeight: 13 }
+        ]
+             },
+
+
+       ]
+        },
+         { split: 2, strokeWidth: 2, strokeHeight: 15, children: [
+        { split: 10, minPixelWidth: 5, strokeWidth: 1, strokeHeight: 10 },
+        { split: 6, minPixelWidth: 3, strokeWidth: 1, strokeHeight: 10}]
+         }]
+        };
+
+        var hotZones = { resize: { zones: [{ name: "top", range: [0, 0, 0, 0] },
+        { name: "right", range: [0, 0, 0, 0] },
+        { name: "bottom", range: [0, 0, 0, 0] },
+        { name: "left", range: [0, 0, 0, 0]}],
+            style: { strokeStyle: "#ffffff", strokeWidth: 3 },
+            hoverStyle: { strokeStyle: "#00ff00" },
+            downStyle: { strokeStyle: "#ffff00" }
+        },
+            reoffset: { zones: [{ name: "top_left", range: [0, 0, 0, 0] }, { name: "top_right", range: [0, 0, 0, 0] }, { name: "right_top", range: [0, 0, 0, 0] }, { name: "right_bottom", range: [0, 0, 0, 0] }, { name: "bottom_left", range: [0, 0, 0, 0] }, { name: "bottom_right", range: [0, 0, 0, 0] }, { name: "left_top", range: [0, 0, 0, 0] }, { name: "left_bottom", range: [0, 0, 0, 0]}],
+                style: { fillStyle: "#ffffff", strokeStyle: "#ffffff", strokeWidth: 1, lineCap: 0 },
+                hoverStyle: { fillStyle: "#00ff00" },
+                downStyle: { fillStyle: "#ffff00" }
+            }
+        };
+
+
+        function setSelectOption(sel, optionHtml) {
+            sel.innerHTML = "";
+            if (isIE) {
+                var frag = document.createElement("select");
+                optionHtml = "<select>" + optionHtml + "</select>";
+                frag.innerHTML = optionHtml;
+                var selTmp = frag.childNodes[0];
+
+                while (selTmp.childNodes.length > 0) {
+                    sel.add(selTmp.childNodes[0]);
+                }
+
+            } else {
+                sel.innerHTML = optionHtml;
+            }
+        }
+
+
+
+
+
+
+        function saveConfig() {
+
+            localStorage.unit = currentConfig.unit;
+            localStorage.screenSize = currentConfig.screenSize;
+            localStorage.dpu = currentConfig.dpu;
+            localStorage.showTop = currentConfig.showTop;
+            localStorage.showRight = currentConfig.showRight;
+            localStorage.showBottom = currentConfig.showBottom;
+            localStorage.showLeft = currentConfig.showLeft;
+
+            localStorage.paddingLeft = currentConfig.paddingLeft;
+            localStorage.paddingRight = currentConfig.paddingRight;
+            localStorage.paddingTop = currentConfig.paddingTop;
+            localStorage.paddingBottom = currentConfig.paddingBottom;
+
+        }
+
+        function clearConfig() {
+            for (var key in localStorage) {
+                delete localStorage[key];
+            }
+
+            currentConfig = extend({}, defaultConfig);
+            onDraw();
+        }
+
+        function loadConfig() {
+
+
+            if ("unit" in localStorage) {
+                currentConfig.unit = localStorage.unit;
+                currentConfig.screenSize = localStorage.screenSize;
+                currentConfig.dpu = parseFloat(localStorage.dpu) || currentConfig.dpu;
+                currentConfig.showTop = localStorage.showTop == "true";
+                currentConfig.showRight = localStorage.showRight == "true";
+                currentConfig.showBottom = localStorage.showBottom == "true";
+                currentConfig.showLeft = localStorage.showLeft == "true";
+
+                currentConfig.paddingLeft = parseFloat(localStorage.paddingLeft) || currentConfig.paddingLeft;
+                currentConfig.paddingRight = parseFloat(localStorage.paddingRight) || currentConfig.paddingRight;
+                currentConfig.paddingTop = parseFloat(localStorage.paddingTop) || currentConfig.paddingTop;
+                currentConfig.paddingBottom = parseFloat(localStorage.paddingBottom) || currentConfig.paddingBottom;
+                //  alert(currentConfig.paddingLeft + "," + currentConfig.paddingRight + "," + currentConfig.paddingTop + "," + currentConfig.paddingBottom);
+                firstLoad = false;
+            } 
+
+
+
+
+        }
+
+
+
+
+        function initScreenSizes() {
+            var optionHtml = "";
+
+            optionHtml += '<option value="resize">手动调整</option>';
+
+            for (var i = 0; i < screenSizes.length; i++) {
+                var screenSize = screenSizes[i];
+                var sizes = screenSize.sizes.sort(function (a, b) {
+                    return (a - b);
+                });
+                for (var j = 0; j < sizes.length; j++) {
+                    var size = sizes[j];
+
+                    optionHtml += '<option value="' + size + screenSize.unit + '">' + (size + "").padRight('&nbsp;', 4) + screenSize.unitText + '</option>';
+                }
+            }
+
+
+
+            setSelectOption(selScreenSize, optionHtml);
+            if (currentConfig.screenSize) {
+                selScreenSize.value = currentConfig.screenSize;
+            } else {
+                selScreenSize.value = "resize";
+            }
+
+
+            selScreenSize.onchange = function (e) {
+
+                var val = selScreenSize.value;
+                if (val == "resize") {
+                    resizable = true;
+                } else {
+                    resizable = false;
+
+                    currentConfig.dpu = getDpu(screen.width, screen.height, val, currentConfig.unit);
+
+                    onDraw();
+                }
+
+                currentConfig.screenSize = val;
+                saveConfig();
+
+            }
+
+        }
+
+
+        function initUnits() {
+
+            var optionHtml = "";
+
+            for (var i = 0; i < baseUnits.length; i++) {
+                var unit = baseUnits[i];
+                optionHtml += '<option value="' + unit.unit + '">' + unit.name.padRight('&nbsp;', 3) + '(' + unit.unit + ')</option>';
+            }
+
+            optionHtml += '<option value="px">像素 (px)</option>';
+
+            setSelectOption(selUnit, optionHtml);
+
+            selUnit.value = currentConfig.unit;
+
+            selUnit.onchange = function (e) {
+                var unit = selUnit.value;
+                if (currentConfig.unit != unit) {
+                    if (parseFloat(currentConfig.screenSize) > 0) {
+                        if (unit == "px") {
+                            currentConfig.dpu = defaultConfig.dpu;
+                        } else if (currentConfig.unit == "px") {
+
+                            currentConfig.dpu = getDpu(screen.width, screen.height, currentConfig.screenSize, unit);
+                        } else {
+                            currentConfig.dpu /= lengthUnitConvert(1, currentConfig.unit, unit);
+                        }
+                    }
+
+                    currentConfig.unit = unit;
+
+                    onDraw();
+                }
+            }
+
+        }
+     
+        function initConfigPanel() {
+            var callee = arguments.callee;
+            if (!callee.isInit) {
+                callee.isInit = true;
+            } else {
+                return;
+            }
+            var els, el;
+
+
+
+            initUnits();
+            initScreenSizes();
+
+
+
+
+            els = document.getElementsByName("showRuler");
+            for (var i = 0; i < els.length; i++) {
+                el = els[i];
+                switch (el.value) {
+                    case "top":
+                        el.checked = currentConfig.showTop;
+                        break;
+                    case "right":
+                        el.checked = currentConfig.showRight;
+                        break;
+                    case "bottom":
+                        el.checked = currentConfig.showBottom;
+                        break;
+                    case "left":
+                        el.checked = currentConfig.showLeft;
+                        break;
+                }
+                el.onchange = function () {
+                    switch (this.value) {
+                        case "top":
+                            currentConfig.showTop = this.checked;
+                            break;
+                        case "right":
+                            currentConfig.showRight = this.checked;
+                            break;
+                        case "bottom":
+                            currentConfig.showBottom = this.checked;
+                            break;
+                        case "left":
+                            currentConfig.showLeft = this.checked;
+                            break;
+                    }
+                    onDraw();
+                    saveConfig();
+                }
+            }
+
+            with (configPanel.style) {
+                display = "none";
+            }
+            
+            if (firstLoad) {
+                showConfigPanel();
+            }
+
+        }
+
+
+
+        var regUnit = (/([a-zA-Z_]+) *$/);
+
+        function parseUnit(str, defualtUnit) {
+            var unit = regUnit.exec(str);
+            if (unit) {
+                return unit[1].toLowerCase();
+            }
+            if (defaultUnit) {
+                return defaultUnit.toLowerCase();
+            }
+            return null;
+        }
+
+
+        function getDpi(widthPixel, heightPixel, ScreenSizeIn) {
+            return Math.sqrt(widthPixel * widthPixel + heightPixel * heightPixel) / ScreenSizeIn;
+        }
+
+        function getDpu(widthPixel, heightPixel, size, unit) {
+            var sizeUnit = lengthUnitConvert(parseFloat(size), parseUnit(size, "in"), unit);
+
+            var dpUnit = Math.sqrt(widthPixel * widthPixel + heightPixel * heightPixel) / sizeUnit;
+
+            return dpUnit;
+        }
+
+        function round(val, pos) {
+            return Math.round(val * Math.pow(10, pos)) / Math.pow(10, pos);
+        }
+
+        function pixelToUnit(pixels) {
+            if (currentConfig.unit == "px")
+                return round(pixels, 2);
+
+            return round(pixels / currentConfig.dpu, 2);
+        }
+
+
+        var baseUnits = [
+        /*公制*/
+        //        {unit:"ly",toM: 1.05702341e16,name:"光年"}, 
+        //        {unit:"au",toM:6.68458581e12,name:"天文单位"},
+        //        {unit:"km",toM:1e3,name:"千米"},
+        //        {unit:"m",toM:1,name:"米"},
+        {unit: "dm", toM: 1e-1, name: "分米" },
+        { unit: "cm", toM: 1e-2, name: "厘米" },
+        //        {unit:"mm",toM:1e-3,name:"毫米"},
+        //        {unit:"um",toM:1e-6,name:"微米"},
+        //        {unit:"nm",toM:1e-9,name:"纳米"},
+        //        {unit:"Å",toM:1e-10,name:"埃"},
+        //        {unit:"pm",toM:1e-12,name:"皮米"},
+        /*英制*/
+        //        {unit:"nmi",toM:1852,name:"海里"},
+        //        {unit:"mi",toM:1609.344,name:"英里"},
+        //        {unit:"fg",toM:201.168,name:"弗隆"},
+        //        {unit:"fm",toM:1.8288,name:"英寻"},
+        //        {unit:"yd",toM:0.9144,name:"码"},
+        {unit: "ft", toM: 0.3048, name: "英尺" },
+        { unit: "in", toM: 0.254e-1, name: "英寸" }
+        //市制
+
+                     ];
+
+        function UnitToM(unit) {
+
+            var self = arguments.callee;
+            if (!self.mapBaseUnits) {
+                var mapBaseUnits = {};
+                for (var i = 0; i < baseUnits.length; i++) {
+                    var baseUnit = baseUnits[i];
+                    mapBaseUnits[baseUnit.unit] = baseUnit;
+                }
+                self.mapBaseUnits = mapBaseUnits;
+            }
+
+            return self.mapBaseUnits[unit].toM;
+        }
+
+        function lengthUnitConvert(length, fromUnit, toUnit) {
+            var len = parseFloat(length) || 0;
+            if (!fromUnit || !toUnit)
+                return len;
+
+            if (fromUnit == toUnit || len == 0)
+                return len;
+
+            len = length * UnitToM(fromUnit) / UnitToM(toUnit);
+            return len;
+        }
+
+
+
+        var canvasDrag;
+
+        //        function checkResizeZone(x, y) {
+        //            var zones = hotZones.resize.zones;
+        //            for (var i = 0; i < zones.length; i++) {
+        //                var range = zones[i].range;
+        //                if ((range[0] <= x && x <= range[2]) && (range[1] <= y && y <= range[3])) {
+        //                    return zones[i];
+        //                }
+        //            }
+        //        }
+
+        function checkZone(zones, x, y) {
+            for (var i = 0; i < zones.length; i++) {
+                var range = zones[i].range;
+                if ((range[0] <= x && x <= range[2]) && (range[1] <= y && y <= range[3])) {
+                    return zones[i];
+                }
+            }
+        }
+
+
+
+        function onZoneDown(hotZone, zone) {
+            for (var i = 0; i < hotZone.zones.length; i++) {
+                var z = hotZone.zones[i];
+                var down = z == zone;
+                if (down != z.down) {
+                    z.down = down;
+                    onDraw();
+                }
+            }
+        }
+        function onZoneHover(hotZone, zone) {
+            for (var i = 0; i < hotZone.zones.length; i++) {
+                var z = hotZone.zones[i];
+                var hover = (z == zone);
+                if (z.hover != hover) {
+                    z.hover = hover;
+                    onDraw();
+                }
+            }
+        }
+        function onZoneUp(hotZone) {
+            for (var i = 0; i < hotZone.zones.length; i++) {
+                var z = hotZone.zones[i];
+                if (z.down != false) {
+                    z.down = false;
+                    onDraw();
+                }
+            }
+        }
+
+        function onZoneOut(hotZone) {
+            for (var i = 0; i < hotZone.zones.length; i++) {
+                var z = hotZone.zones[i];
+                if (z.hover != false) {
+                    z.hover = false;
+                    onDraw();
+                }
+            }
+        }
+
+        function resizeZoneVisible(zone) {
+            switch (zone.name) {
+                case "top":
+                    return currentConfig.showTop;
+                    break;
+                case "bottom":
+                    return currentConfig.showBottom;
+                    break;
+                case "left":
+                    return currentConfig.showLeft;
+                    break;
+                case "right":
+                    return currentConfig.showRight;
+
+            }
+            return false;
+        }
+
+        function reoffsetZoneVisible(zone) {
+            switch (zone.name) {
+                case "top_left":
+                case "top_right":
+                    return currentConfig.showTop;
+
+                case "bottom_left":
+                case "bottom_right":
+                    return currentConfig.showBottom;
+                case "left_top":
+                case "left_bottom":
+                    return currentConfig.showLeft;
+                case "right_top":
+                case "right_bottom":
+                    return currentConfig.showRight;
+            }
+            return false;
+        }
+
+
+        function bindEvent(el, event, func) {
+            if (!el) return;
+            if (el.addEventListener) {
+                el.addEventListener(event, func, false);
+            } else if (el.attachEvent) {
+                el.attachEvent("on" + event, func);
+                // el.setCapture();
+            }
+        }
+        function unbindEvent(el, event, func) {
+            if (!el) return;
+            if (el.removeEventListener) {
+                el.removeEventListener(event, func, false);
+            } else if (el.detachEvent) {
+                el.detachEvent("on" + event, func);
+
+            }
+            //releaseCapture
+            //setCapture
+        }
+
+        //        bindEvent(document.documentElement, "mouseup", function (e) {
+        //            alert(e);
+        //        });
+
+
+
+        function drag(el, onDragStart, onDrag, onDragEnd, range) {
+
+
+            this.el = el;
+            var self = this;
+            this.startX = 0;
+            this.startY = 0;
+            this.x = 0;
+            this.y = 0;
+            this.lastX = 0;
+            this.lastY = 0;
+            this.range = range;
+            this.curEvt;
+            this.events = {
+                mousedown: delegate(function (evt) {
+                    with (this) {
+
+                        if (draging)
+                            return;
+
+                        if (range) {
+                            if (isFunc(range)) {
+
+                                if (!range.apply(this, [evt]))
+                                    return;
+                            } else if (!inRange(evt.x, evt.y, range))
+                                return;
+                        }
+
+
+                        bindEvent(document, "mousemove", events.mousemove);
+                        bindEvent(document, "mouseup", events.mouseup);
+
+
+                        curEvt = evt;
+                        //  alert(evt.x + "," + evt.pageX + "," + evt.offsetX);
+
+                        lastX = startX = x = evt.x;
+                        lastY = startY = x = evt.y;
+
+                        draging = true;
+                        if (onDragStart) onDragStart.apply(this, [evt]);
+
+                    }
+                }, this),
+                mousemove: delegate(function (evt) {
+                    with (this) {
+                        var ox = evt.x - lastX, oy = evt.y - lastY;
+                        //log(  evt.x + "," + dragData.lastX);
+
+                        if (ox != 0 || oy != 0) {
+                            curEvt = evt;
+                            x = evt.x;
+                            y = evt.y;
+
+                            if (onDrag) onDrag.apply(this, [evt, ox, oy]);
+
+                            lastX = evt.x;
+                            lastY = evt.y;
+                        }
+                    }
+
+                }, this),
+                mouseup: delegate(function (evt) {
+                    with (this) {
+
+                        curEvt = evt;
+                        unbindEvent(document, "mousemove", events.mousemove);
+                        unbindEvent(document, "mouseup", events.mouseup);
+                        draging = false;
+
+                        if (onDragEnd) onDragEnd.apply(this, [evt]);
+
+                    }
+
+                }, this)
+            };
+            this.onDragStart = onDragStart;
+            this.onDrag = onDrag;
+            this.onDragEnd = onDragEnd;
+
+
+
+            this.draging = false;
+            this.enabled = false;
+            this.enable();
+
+        }
+        drag.prototype = {
+            enable: function () {
+                with (this) {
+                    if (enabled) return;
+
+                    bindEvent(el, "mousedown", events.mousedown);
+                    enabled = true;
+                }
+            },
+            disable: function () {
+                with (this) {
+
+                    if (!enabled) return;
+                    unbindEvent(el, "mousedown", events.mousedown);
+
+                    if (this.draging) {
+                        cancel();
+
+                    }
+
+                    enabled = false;
+                }
+            },
+            cancel: function () {
+                with (this) {
+                    if (draging) {
+
+                        unbindEvent(document, "mousemove", events.mousemove);
+                        unbindEvent(document, "mouseup", events.mouseup);
+
+                        if (onDragEnd) onDragEnd.apply(this, [curEvt]);
+                        draging = false;
+                    }
+                }
+            }
+        }
+
+
+        //        var d = new drag(canvas, function (evt) {
+        //            log("down");
+        //        }, function (evt, ox, oy) {
+        //            log("" + ox + "," + oy);
+        //        }, function (evt) {
+
+        //        });
+
+        function init() {
+
+            resizable = false;
+            reoffsetable = false;
+
+            for (var i = 0; i < hotZones.resize.zones.length; i++) {
+                var zone = hotZones.resize.zones[i];
+                zone.drag = new drag(canvas, function (e) {
+
+                    this.dpu = currentConfig.dpu;
+                    canvas.style.cursor = "move";
+                    onZoneDown(hotZones.resize, zone);
+                    canvasDraging = true;
+                }, function (e, ox, oy) {
+
+                    if (resizable) {
+                        var scale = 1, dpu = this.dpu;
+                        if (e.ctrlKey) {
+                            scale = 0.1;
+                        }
+                        if (this.zone.name == "top" || this.zone.name == "bottom") {
+                            dpu = dpu + (e.x - this.startX) * scale;
+
+                        } else {
+                            dpu = dpu + (e.y - this.startY) * scale;
+                        }
+
+                        if (dpu >= 40) {
+                            if (currentConfig.dpu != dpu) {
+                                currentConfig.dpu = dpu;
+                                onDraw();
+                            }
+                        }
+                    } else {
+                        this.cancel();
+                    }
+                }, function (e) {
+                    saveConfig();
+                    canvas.style.cursor = "default";
+                    onZoneUp(hotZones.resize);
+                    canvasDraging = false;
+                }, function (e) {
+
+                    if (!resizable)
+                        return false;
+                    var check = resizeZoneVisible(this.zone);
+                    check = check && inRange(e.x, e.y, this.zone.range);
+
+                    return check;
+                });
+                zone.drag.zone = zone;
+            }
+
+
+
+            for (var i = 0; i < hotZones.reoffset.zones.length; i++) {
+                var zone = hotZones.reoffset.zones[i];
+                zone.drag = new drag(canvas, function (e) {
+                    var zone = this.zone;
+                    switch (zone.name) {
+                        case "top_left":
+                        case "bottom_left":
+                            this.padding = currentConfig.paddingLeft;
+
+                            break;
+                        case "top_right":
+                        case "bottom_right":
+                            this.padding = currentConfig.paddingRight;
+                            break;
+                        case "left_top":
+                        case "right_top":
+                            this.padding = currentConfig.paddingTop;
+                            break;
+                        case "left_bottom":
+                        case "right_bottom":
+                            this.padding = currentConfig.paddingBottom;
+                            break;
+                    }
+                    canvas.style.cursor = "move";
+                    onZoneDown(hotZones.reoffset, zone);
+                    canvasDraging = true;
+                }, function (e) {
+                    if (reoffsetable) {
+
+                        var padding;
+                        switch (this.zone.name) {
+                            case "top_left":
+                            case "bottom_left":
+                                padding = this.padding + (e.x - this.startX);
+
+                                padding = Math.clamp(padding, 0, canvas.width - canvas.offset.right);
+                                currentConfig.paddingLeft = padding;
+
+                                break;
+                            case "top_right":
+                            case "bottom_right":
+                                padding = this.padding - (e.x - this.startX);
+                                padding = Math.clamp(padding, 0, canvas.width - canvas.offset.left - canvas.margin.right);
+                                currentConfig.paddingRight = padding;
+                                break;
+                            case "left_top":
+                            case "right_top":
+                                padding = this.padding + (e.y - this.startY);
+                                padding = Math.clamp(padding, 0, canvas.height - canvas.offset.bottom);
+                                currentConfig.paddingTop = padding;
+
+                                break;
+                            case "left_bottom":
+                            case "right_bottom":
+                                padding = this.padding - (e.y - this.startY);
+
+                                padding = Math.clamp(padding, 0, canvas.height - canvas.offset.top - canvas.margin.bottom);
+                                currentConfig.paddingBottom = padding;
+                                break;
+                        }
+
+                        onDraw();
+                    } else {
+                        this.cancel();
+                    }
+                }, function (e) {
+                    saveConfig();
+                    onZoneUp(hotZones.reoffset);
+                    canvasDraging = false;
+                }, function (e) {
+                    if (!reoffsetable)
+                        return false;
+                    var check = reoffsetZoneVisible(this.zone);
+
+                    check = check && inRange(e.x, e.y, this.zone.range);
+                    return check;
+
+                });
+                zone.drag.zone = zone;
+            }
+
+        }
+
+
+
+        var canvasDraging;
+
+
+
+
+        canvas.onmousemove = function (e) {
+
+            if (!canvasDraging) {
+                var zone;
+                if (resizable) {
+                    zone = checkZone(hotZones.resize.zones, e.x, e.y);
+                    if (zone && resizeZoneVisible(zone)) {
+
+                        canvas.style.cursor = "move";
+                        onZoneHover(hotZones.resize, zone);
+
+                    } else {
+                        canvas.style.cursor = "default";
+                        onZoneOut(hotZones.resize);
+                    }
+                }
+
+                if (!zone && reoffsetable) {
+                    zone = checkZone(hotZones.reoffset.zones, e.x, e.y);
+                    if (zone && reoffsetZoneVisible(zone)) {
+                        canvas.style.cursor = "move";
+                        onZoneHover(hotZones.reoffset, zone);
+                    } else {
+                        canvas.style.cursor = "default";
+                        onZoneOut(hotZones.reoffset);
+                    }
+                }
+            }
+        }
+
+
+
+        function clearCanvasStyle(canvas) {
+            if (!canvas)
+                return;
+            var context = canvas.getContext('2d');
+
+            context.lineWidth = 1;
+
+            context.strokeStyle = "#000000";
+
+            context.fillStyle = "#000000";
+
+            context.textBaseline = "";
+
+            context.font = "";
+
+            context.lineCap = "";
+        }
+        function setCanvasStyle(canvas, style) {
+            if (!canvas || !style)
+                return;
+            var context = canvas.getContext('2d');
+            if (typeof style.strokeWidth)
+                context.lineWidth = style.strokeWidth;
+
+            if (typeof style.strokeStyle)
+                context.strokeStyle = style.strokeStyle;
+
+            if (typeof style.fillStyle)
+                context.fillStyle = style.fillStyle;
+            if (typeof style.textBaseline)
+                context.textBaseline = style.textBaseline;
+            if (typeof style.font)
+                context.font = style.font;
+            if (typeof style.lineCap)
+                context.lineCap = style.lineCap;
+        }
+
+
+        function drawRulerScale(canvas, unit, direct) {
+            var context = canvas.getContext('2d');
+
+            clearCanvasStyle(canvas);
+            setCanvasStyle(canvas, unit);
+
+
+
+            var dpu = currentConfig.dpu;
+
+
+            var split = parseInt(unit.split) || 1;
+            if (split <= 0)
+                split = 1;
+
+
+            var x = 0, y = 0, xMax = 0, yMax = 0;
+            var xMin = 0, yMin = 0;
+            var text;
+            var metrics;
+            var xDir = 1, yDir = 1;
+            if (direct == "top") {
+                yDir = 1;
+                y = canvas.margin.top;
+
+                setCanvasStyle(canvas, { textBaseline: "top" });
+                //                if (canvas.padding.top < yMax)
+                //                    canvas.padding.top = yMax;
+            } else if (direct == "bottom") {
+                yDir *= -1;
+                y = canvas.height - canvas.margin.bottom;
+                //yMax = y - unit.strokeHeight;
+                setCanvasStyle(canvas, { textBaseline: "bottom" });
+                //                if (canvas.padding.bottom < canvas.height - yMax)
+                //                    canvas.padding.bottom = canvas.height - yMax;
+            } else if (direct == "left") {
+                xDir = 1;
+                x = canvas.margin.left;
+                //xMax = x + unit.strokeHeight;
+                setCanvasStyle(canvas, { textBaseline: "middle" });
+                //                if (canvas.padding.left < xMax)
+                //                    canvas.padding.left = xMax;
+            } else if (direct == "right") {
+                xDir = -1;
+                x = canvas.width - canvas.margin.right;
+
+                setCanvasStyle(canvas, { textBaseline: "middle" });
+                //                if (canvas.padding.right < canvas.width - xMax)
+                //                    canvas.padding.right = canvas.width - xMax;
+            }
+
+
+
+            context.beginPath();
+
+
+            if (direct == "top" || direct == "bottom") {
+
+                xMin = canvas.offset.left;
+                xMax = canvas.width - canvas.offset.right;
+                yMax = y + unit.strokeHeight * yDir;
+                var count = Math.ceil((xMax - xMin) / dpu);
+
+                for (var i = 0; i < count; i++) {
+
+                    for (var j = 0; j < split; j++) {
+                        var index = i * split + j;
+
+                        x = xMin + dpu * i + dpu * (j / split);
+                        if (x > xMax)
+                            break;
+
+                        context.moveTo(x, y);
+                        context.lineTo(x, yMax);
+
+                        if (typeof unit.text == "function") {
+                            text = unit.text.apply(unit, [index]);
+                        }
+                        if (text) {
+                            metrics = context.measureText(text);
+
+                            context.fillText(text, x - metrics.width / 2, yMax + 2 * yDir);
+                        }
+                    }
+
+                }
+            } else {
+
+                xMax = x + unit.strokeHeight * xDir;
+                yMin = canvas.offset.top;
+                yMax = canvas.height - canvas.offset.bottom;
+
+                var count = Math.ceil((yMax - yMin) / dpu);
+                for (var i = 0; i < count; i++) {
+
+                    for (var j = 0; j < split; j++) {
+                        var index = i * split + j;
+
+                        y = yMin + dpu * i + dpu * (j / split);
+
+                        if (y > yMax)
+                            break;
+
+                        context.moveTo(x, y);
+                        context.lineTo(xMax, y);
+
+                        if (typeof unit.text == "function") {
+                            text = unit.text.apply(unit, [index]);
+                        }
+                        if (text) {
+                            metrics = context.measureText(text);
+
+                            if (direct == "left")
+                                context.fillText(text, xMax + 2 * xDir, y);
+                            else
+                                context.fillText(text, xMax + (metrics.width + 4) * xDir, y);
+
+                        }
+                    }
+
+                }
+
+            }
+
+            //draw
+            context.fill();
+            context.stroke();
+            context.closePath();
+        }
+
+
+
+
+        // canvas.
+        function drawRuler(canvas, units, direct) {
+
+
+            var dpu = currentConfig.dpu;
+            var context = canvas.getContext('2d');
+
+            context.lineWidth = 1;
+            context.fillStyle = "#000000";
+
+
+            if (units.children) {
+                for (var i = 0; i < units.children.length; i++) {
+                    var unit = units.children[i];
+                    var minWidth = Math.ceil(dpu / unit.split);
+
+                    if (!("minPixelWidth" in unit) || unit.minPixelWidth < minWidth) {
+
+                        drawRuler(canvas, unit, direct);
+                        break;
+                    }
+
+                }
+            }
+
+            drawRulerScale(canvas, units, direct);
+        }
+
+
+
+        function drawHotZone() {
+            var hotZone;
+            var zones;
+            if (resizable) {
+                var context = canvas.getContext('2d');
+                hotZone = hotZones.resize;
+                zones = hotZones.resize.zones;
+                for (var i = 0; i < zones.length; i++) {
+                    var zone = zones[i];
+
+                    clearCanvasStyle(canvas);
+                    setCanvasStyle(canvas, hotZone.style);
+
+                    if (hotZone.downStyle && zone.down)
+                        setCanvasStyle(canvas, hotZone.downStyle);
+                    else if (hotZone.hoverStyle && zone.hover)
+                        setCanvasStyle(canvas, hotZone.hoverStyle);
+
+
+
+                    var range = zone.range;
+
+
+
+                    switch (zone.name) {
+                        case "top":
+                            if (!currentConfig.showTop)
+                                continue;
+                            context.beginPath();
+                            context.moveTo(range[0], range[1]);
+                            context.lineTo(range[0], range[3]);
+                            context.lineTo(range[2], range[3]);
+                            context.lineTo(range[2], range[1]);
+                            break;
+                        case "right":
+                            if (!currentConfig.showRight)
+                                continue;
+                            context.beginPath();
+                            context.moveTo(range[2], range[1]);
+                            context.lineTo(range[0], range[1]);
+                            context.lineTo(range[0], range[3]);
+                            context.lineTo(range[2], range[3]);
+                            break;
+                        case "bottom":
+                            if (!currentConfig.showBottom)
+                                continue;
+                            context.beginPath();
+                            context.moveTo(range[0], range[3]);
+                            context.lineTo(range[0], range[1]);
+                            context.lineTo(range[2], range[1]);
+                            context.lineTo(range[2], range[3]);
+                            break;
+                        case "left":
+                            if (!currentConfig.showLeft)
+                                continue;
+                            context.beginPath();
+                            context.moveTo(range[0], range[1]);
+                            context.lineTo(range[2], range[1]);
+                            context.lineTo(range[2], range[3]);
+                            context.lineTo(range[0], range[3]);
+                            break;
+                    }
+
+
+
+                    context.stroke();
+                    context.closePath();
+                }
+
+            }
+
+            if (reoffsetable) {
+
+                var context = canvas.getContext('2d');
+                hotZone = hotZones.reoffset;
+                zones = hotZones.reoffset.zones;
+
+
+                for (var i = 0; i < zones.length; i++) {
+                    var zone = zones[i];
+
+                    clearCanvasStyle(canvas);
+                    setCanvasStyle(canvas, hotZone.style);
+
+                    if (hotZone.downStyle && zone.down)
+                        setCanvasStyle(canvas, hotZone.downStyle);
+                    else if (hotZone.hoverStyle && zone.hover)
+                        setCanvasStyle(canvas, hotZone.hoverStyle);
+
+
+                    var range = zone.range;
+                    var width = range[2] - range[0], height = range[3] - range[1];
+                    var radius;
+
+
+                    switch (zone.name) {
+                        case "top_left":
+                        case "top_right":
+                            if (!currentConfig.showTop)
+                                continue;
+
+                            radius = width / 2;
+
+                            context.beginPath();
+                            context.moveTo(range[0] + radius, range[1]);
+                            context.lineTo(range[0], range[3] - radius);
+                            context.arcTo(range[0], range[3], range[2], range[3], radius);
+                            context.lineTo(range[0] + radius, range[3]);
+                            context.arcTo(range[2], range[3], range[0] + radius, range[1], radius);
+                            context.closePath();
+                            context.fill();
+                            context.stroke();
+                            break;
+                        case "bottom_left":
+                        case "bottom_right":
+                            if (!currentConfig.showBottom)
+                                continue;
+                            radius = width / 2;
+                            context.beginPath();
+
+                            context.moveTo(range[0] + radius, range[3]);
+                            context.lineTo(range[0], range[1] + radius);
+                            context.arcTo(range[0], range[1], range[2], range[1], radius);
+                            context.lineTo(range[0] + radius, range[1]);
+                            context.arcTo(range[2], range[1], range[0] + width / 2, range[3], radius);
+                            context.closePath();
+                            context.fill();
+                            context.stroke();
+                            break;
+                        case "right_top":
+                        case "right_bottom":
+                            if (!currentConfig.showRight)
+                                continue;
+                            radius = height / 2;
+                            context.beginPath();
+                            context.moveTo(range[2], range[1] + radius);
+                            context.lineTo(range[0] + radius, range[1]);
+                            context.arcTo(range[0], range[1], range[0], range[3], radius);
+                            context.lineTo(range[0], range[1] + radius);
+                            context.arcTo(range[0], range[3], range[2], range[1] + height / 2, radius);
+                            context.closePath();
+                            context.fill();
+                            context.stroke();
+                            break;
+                        case "left_top":
+                        case "left_bottom":
+                            if (!currentConfig.showLeft)
+                                continue;
+                            radius = height / 2;
+                            context.beginPath();
+                            context.moveTo(range[0], range[1] + radius);
+                            context.lineTo(range[2] - radius, range[1]);
+                            context.arcTo(range[2], range[1], range[2], range[3], radius);
+                            context.lineTo(range[2], range[1] + radius);
+                            context.arcTo(range[2], range[3], range[0], range[1] + height / 2, radius);
+                            context.closePath();
+                            context.fill();
+                            context.stroke();
+                            break;
+                    }
+
+
+
+                }
+            }
+
+        }
+
+        onDraw = delayInvoke(function (arg) {
+
+
+            var docEl = document.documentElement;
+
+            canvas.width = docEl.clientWidth;
+            canvas.height = docEl.clientHeight;
+            if (isChrome) {
+                // canvas.width += 1;
+                //  canvas.height += 1;
+
+            }
+            if (!canvas.padding) {
+                canvas.padding = { left: 0, right: 0, top: 0, bottom: 0 };
+                canvas.margin = { left: 0, right: 0, top: 0, bottom: 0 };
+                canvas.offset = { left: 0, right: 0, top: 0, bottom: 0 };
+            }
+            with (canvas.padding) {
+                left = currentConfig.paddingLeft;
+                right = currentConfig.paddingRight;
+                top = currentConfig.paddingTop;
+                bottom = currentConfig.paddingBottom;
+            }
+            with (canvas) {
+                offset.left = margin.left + padding.left;
+                offset.right = margin.right + padding.right;
+                offset.top = margin.top + padding.top;
+                offset.bottom = margin.bottom + padding.bottom;
+            }
+
+            //alert(canvas.offset.left + "," + canvas.offset.right + "," + canvas.offset.top + "," + canvas.offset.bottom);
+
+            if (resizable) {
+                var height = units.strokeHeight;
+                var offset = 10;
+                var zones = hotZones.resize.zones;
+                for (var i = 0; i < zones.length; i++) {
+                    var zone = zones[i];
+                    var range = zone.range;
+                    switch (zone.name) {
+                        case "top":
+                            range[0] = canvas.offset.left + offset;
+                            range[1] = canvas.margin.top;
+                            range[2] = canvas.width - canvas.offset.right - offset;
+                            range[3] = range[1] + height;
+                            break;
+                        case "bottom":
+                            range[0] = canvas.offset.left + offset;
+                            range[1] = canvas.height - canvas.margin.bottom - height;
+                            range[2] = canvas.width - canvas.offset.right - offset;
+                            range[3] = range[1] + height;
+                            break;
+                        case "left":
+                            range[0] = canvas.margin.left;
+                            range[1] = canvas.offset.top + offset;
+                            range[2] = range[0] + height;
+                            range[3] = canvas.height - canvas.offset.bottom - offset;
+                            break;
+                        case "right":
+                            range[0] = canvas.width - canvas.margin.right - height;
+                            range[1] = canvas.offset.top + offset;
+                            range[2] = range[0] + height;
+                            range[3] = canvas.height - canvas.offset.bottom - offset;
+                            break;
+                    }
+                }
+
+            }
+
+
+            if (reoffsetable) {
+                var height = units.strokeHeight + 30;
+                var offset = 8;
+                var zones = hotZones.reoffset.zones;
+                for (var i = 0; i < zones.length; i++) {
+                    var zone = zones[i];
+                    var range = zone.range;
+                    switch (zone.name) {
+                        case "top_left":
+                            range[0] = canvas.offset.left - offset;
+                            range[1] = canvas.margin.top;
+                            range[2] = range[0] + offset * 2;
+                            range[3] = range[1] + height;
+                            break;
+                        case "top_right":
+                            range[0] = canvas.width - canvas.offset.right - offset;
+                            range[1] = canvas.margin.top; ;
+                            range[2] = range[0] + offset * 2;
+                            range[3] = range[1] + height;
+                            break;
+                        case "bottom_left":
+                            range[0] = canvas.offset.left - offset;
+                            range[1] = canvas.height - canvas.margin.bottom - height;
+                            range[2] = range[0] + offset * 2;
+                            range[3] = range[1] + height;
+                            break;
+                        case "bottom_right":
+                            range[0] = canvas.width - canvas.offset.right - offset;
+                            range[1] = canvas.height - canvas.margin.bottom - height;
+                            range[2] = range[0] + offset * 2;
+                            range[3] = range[1] + height;
+                            break;
+                        case "left_top":
+                            range[0] = canvas.margin.left;
+                            range[1] = canvas.offset.top - offset;
+                            range[2] = range[0] + height;
+                            range[3] = range[1] + offset * 2;
+                            break;
+                        case "left_bottom":
+                            range[0] = canvas.margin.left;
+                            range[1] = canvas.height - canvas.offset.bottom - offset;
+                            range[2] = range[0] + height;
+                            range[3] = range[1] + offset * 2;
+                            break;
+                        case "right_top":
+                            range[0] = canvas.width - canvas.margin.right - height;
+                            range[1] = canvas.offset.top - offset;
+                            range[2] = range[0] + height;
+                            range[3] = range[1] + offset * 2;
+                            break;
+                        case "right_bottom":
+                            range[0] = canvas.width - canvas.margin.right - height;
+                            range[1] = canvas.height - canvas.offset.bottom - offset;
+                            range[2] = range[0] + height;
+                            range[3] = range[1] + offset * 2;
+                            break;
+                    }
+                }
+
+            }
+
+
+            with (configPanel.style) {
+                if (display != "none") {
+                    left = (canvas.width - configPanel.offsetWidth) / 2 + "px";
+                    top = (canvas.height - configPanel.offsetHeight) / 2 + "px";
+                }
+            }
+
+
+
+
+
+            drawHotZone();
+
+            if (currentConfig.showTop) {
+                drawRuler(canvas, units, "top");
+            }
+            if (currentConfig.showBottom) {
+                drawRuler(canvas, units, "bottom");
+            }
+            if (currentConfig.showLeft) {
+                drawRuler(canvas, units, "left");
+            }
+            if (currentConfig.showRight) {
+                drawRuler(canvas, units, "right");
+            }
+
+
+
+        }, 50);
+
+
+        var aboutPanelPosition = delayInvoke(function () {
+            with (aboutPanel.style) {
+                var oldDisplay = display;
+                display = "block";
+                if (display != "none") {
+                    left = ((canvas.width - aboutPanel.offsetWidth) / 2) + "px";
+                    top = ((canvas.height - aboutPanel.offsetHeight) / 2) + "px";
+                }
+                display = oldDisplay;
+            }
+        }, 50);
+        var buttonPanelPosition = delayInvoke(function () {
+
+            with (buttonPanel.style) {
+                var oldDisplay = display;
+                display = "block";
+                if (display != "none") {
+                    left = ((canvas.width - buttonPanel.offsetWidth) / 2) + "px";
+                    top = ((canvas.height - buttonPanel.offsetHeight) / 2) + "px";
+                }
+                display = oldDisplay;
+            }
+        }, 50);
+
+        window.onload = function () {
+
+            init();
+            loadConfig();
+
+
+            initConfigPanel();
+
+
+            bindEvent(window, "resize", onDraw);
+
+            bindEvent(window, "resize", buttonPanelPosition);
+
+            bindEvent(window, "resize", aboutPanelPosition);
+
+            onDraw();
+
+            buttonPanelPosition();
+        }
+
+        function showConfigPanel() {
+            configPanel.style.display = "block";
+            buttonPanel.style.display = "none";
+
+            if (currentConfig.screenSize == "resize") {
+                resizable = true;
+            } else {
+                resizable = false;
+            }
+            reoffsetable = true;
+            onDraw();
+        }
+
+        function hideConfigPanel() {
+            configPanel.style.display = "none";
+            buttonPanel.style.display = "block";
+            resizable = false;
+            reoffsetable = false;
+            onDraw();
+
+        }
+
+
+        function showAboutPanel() {
+            aboutPanel.style.display = "block";
+            buttonPanel.style.display = "none";
+            aboutPanelPosition();
+            addCls(aboutPanel, "show");
+        }
+
+        function hideAboutPanel() {
+            aboutPanel.style.display = "none";
+            buttonPanel.style.display = "block";
+            buttonPanelPosition();
+            removeCls(aboutPanel, "show");
+        }
+       
+    </script>
+</body>
+</html>
