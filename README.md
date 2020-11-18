@@ -2,7 +2,7 @@
 
 
 
-![](doc\screenshot_640-400.PNG)
+![](doc/screenshot_640-400.PNG)
 
 
 
